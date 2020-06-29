@@ -1,6 +1,8 @@
-#include <LiquidCrystal_PCF8574.h>
-// #include <Servo.h>
-#include <DS1307RTC.h>
+#include <Arduino.h>
+#include <LiquidCrystal_I2C.h>
+#include <Servo.h>
+// #include <DS1307RTC.h>
+#include <RTClib.h>
 #include <EEPROM.h>
 #include <Time.h>
 #include <Wire.h>
@@ -11,105 +13,237 @@
 #define CANCELAR 8
 #define MAX_MATES_TOTAL 21
 
-LiquidCrystal_PCF8574 lcd(0x27);
-tmElements_t tm;
+RTC_DS1307 rtc;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+// tmElements_t tm;
 
-// Servo servo;
+Servo servo;
 const int PINSERVO = 9;
 const int PULSOMIN = 490;
 const int PULSOMAX = 4500;
 const int cerrado = 0;
-const int abierto = 60;
+const int abierto = 30;
 int volumenMate;
 int pot;
 int indice = 0;
 int indiceHora;
+int indiceModo1 = 0;
 
 String listaDeHorarios[MAX_MATES_TOTAL] = {
     //Horas para probar
-    "12345",
-    "31356",
-    "70906",
-    "50345"
-    };
+    "32005",
+    "32006",
+    "32007",
+    "32008",
+    "32009",
+};
+
+const String dias[] = {"Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"};
 
 int error;
+//Fija el estado de la interfaz
 int modo = 0;
+
 void setup()
 {
     Serial.begin(9600);
     pinMode(ACEPTAR, INPUT);
     pinMode(CANCELAR, INPUT);
     //Setea todas las cosas q haga falta
-    // pinMode(9, OUTPUT);
-    // servo.attach(PINSERVO, PULSOMIN, PULSOMAX);
-    // servo.write(cerrado);
+    pinMode(9, OUTPUT);
+    servo.attach(PINSERVO, PULSOMIN, PULSOMAX);
     Wire.begin();
     Wire.beginTransmission(0x27);
     error = Wire.endTransmission();
-    lcd.clear();
-    lcd.setBacklight(255);
     lcd.begin(16, 2);
+    lcd.backlight();
+    lcd.clear();
+
+    if (!rtc.begin())
+    {
+        Serial.println("Couldn't find RTC");
+        while (1)
+            ;
+    }
+    if (!rtc.isrunning())
+    {
+        Serial.println("RTC is NOT running!");
+        // following line sets the RTC to the date & time this sketch was compiled
+        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        // This line sets the RTC with an explicit date & time, for example to set
+        // January 21, 2014 at 3am you would call:
+        // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+    }
+    // String resultado = comprimirHora("Martes", "12", "45");
+    // Serial.println(resultado);
+    servo.write(cerrado);
+    //! Está tardando mucho esto
+    Serial.println("Activando servo");
+    servo.write(abierto);
+    delay(100);
+    servo.write(cerrado);
 }
 
 void loop()
 {
+    DateTime horaActual = rtc.now();
+    String ahora = leerHora(horaActual);
+    for (int i; i <= maxIndiceNoVacio(); i++)
+    {
+        if (ahora == listaDeHorarios[i])
+        {
+            Serial.println(ahora);
+        }
+    }
 
-    RTC.read(tm);
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("LCD");
-    // crop(tm.Hour);
+    // cleanTime(tm.Hour);
     // lcd.print(":");
-    // crop(tm.Minute);
+    // cleanTime(tm.Minute);
     // lcd.print(":");
-    // crop(tm.Second);
-    delay(100);
+    // cleanTime(tm.Second);
+    delay(200);
 
-    switch (modo)
+    if (modo == 0)
     {
-    /* Navegar entre horarios */
-    case 0:
+        /* Navegar entre horarios */
         lcd.clear();
-        delay(50);
+        lcd.print("Horarios");
         lcd.setCursor(0, 1);
         int ultimoIndice = maxIndiceNoVacio();
         if (ultimoIndice >= 0)
         {
             pot = analogRead(POT);
-            indiceHora = map(pot, 0, 1024, 0, ultimoIndice+1);
-            // char* horario = printHora(listaDeHorarios[indiceHora]).c_str();
-            String horario = printHora("12345");
-            //! Esto no anda
-            lcd.print(horario);
-            // Serial.println(listaDeHorarios[indiceHora].c_str());
+            indiceHora = map(pot, 0, 1024, 0, ultimoIndice + 1);
+            // Serial.println(listaDeHorarios[indiceHora]);
+            lcd.print(printHora(listaDeHorarios[indiceHora]));
 
-        } else {
+            if (digitalRead(CANCELAR))
+            {
+                // listaDeHorarios[indiceHora] = "";
+                lcd.clear();
+                lcd.print("Borrar horario?");
+                while (true)
+                {
+                    if (digitalRead(CANCELAR))
+                    {
+                        break;
+                    }
+                    else if (digitalRead(ACEPTAR))
+                    {
+                        printArray(listaDeHorarios);
+                        shiftArray(listaDeHorarios, indiceHora);
+                        printArray(listaDeHorarios);
+                        delay(500);
+                        break;
+                    }
+                }
+            };
+        }
+        else
+        {
             lcd.print("No hay horarios");
-        }ñ
+        }
 
-        break;
-    case 1:
-        /* Agregar horario */
-        break;
-    default:
-        break;
+        if (digitalRead(ACEPTAR))
+        {
+            modo = 1;
+        }
     }
+    else if (modo == 1)
+    {
+        String dia;
+        String hora;
+        String minuto;
 
-    //Fijate si el usuario ya nos dio el volumen del mate
-    // if (!volumenMate){
-    //     lcd.setCursor(0, 0);
-    //     lcd.print("Volumen: ");
-    //     while(!botonAdelante){
-    //         potenciometro = analogRead(/* potenciometro */);
-    //         volumenMate = map(potenciometro, 0, 1023, 10, 1000); //mapealo a un volumen, ponele q max=1000 y min=10
-    //         lcd.setCursor(1, 0);
-    //         lcd.print(volumenMate);
-    //         lcd.setCursor(1, 5);
-    //         lcd.print("ml");
-    //     }
-    //Una vez q saliste del loop, es decir, el loco tocó para adelante, guardas el volumen en EEPROM
+        /* Agregar horario */
+
+        // Seleccionar dia
+        while (!digitalRead(ACEPTAR))
+        {
+            lcd.clear();
+            lcd.print("Seleccionar dia");
+            lcd.setCursor(0, 1);
+            if (digitalRead(CANCELAR))
+            {
+                modo = 0;
+                break;
+            }
+            pot = analogRead(POT);
+            indiceModo1 = map(pot, 0, 1024, 0, 7);
+            //Cuando termine el loop, dia es el dia seleccionado
+            dia = dias[indiceModo1];
+            lcd.print(dia);
+        }
+
+        delay(500);
+
+        //! Cuando termina con uno, terminan todos los demás
+        //! Porque se ejecutan las cosas más rápido de lo q podés soltar el botón
+        Serial.println("Terminamos con el dia");
+
+        //Seleccionar hora
+        while (!digitalRead(ACEPTAR) && modo == 1)
+        {
+            lcd.clear();
+            lcd.print("Seleccionar hora");
+            lcd.setCursor(0, 1);
+            if (digitalRead(CANCELAR))
+            {
+                modo = 0;
+                break;
+            }
+            pot = analogRead(POT);
+            indiceModo1 = map(pot, 0, 1024, 0, 23);
+            hora = cleanTime(indiceModo1);
+            lcd.print(hora);
+            lcd.print(":00");
+        }
+        Serial.println("Terminamos con la hora");
+        delay(500);
+
+        //Seleccionar minuto
+        while (!digitalRead(ACEPTAR) && modo == 1)
+        {
+            lcd.clear();
+            lcd.print("Seleccionar minuto");
+            lcd.setCursor(0, 1);
+            if (digitalRead(CANCELAR))
+            {
+                modo = 0;
+                break;
+            }
+            pot = analogRead(POT);
+            indiceModo1 = map(pot, 0, 1024, 0, 60);
+            //Cuando termine el loop, dia es el dia seleccionado
+            minuto = cleanTime(indiceModo1);
+            lcd.print(hora + ":");
+            lcd.print(minuto);
+        }
+
+        Serial.println("Terminamos con el minuto");
+
+        //Si llegamos hasta acá, el usuario completó el ciclo, agregamos la hora a la lista
+        // int indice = maxIndiceNoVacio();
+
+        modo = 0;
+    }
 }
+
+//Fijate si el usuario ya nos dio el volumen del mate
+// if (!volumenMate){
+//     lcd.setCursor(0, 0);
+//     lcd.print("Volumen: ");
+//     while(!botonAdelante){
+//         potenciometro = analogRead(/* potenciometro */);
+//         volumenMate = map(potenciometro, 0, 1023, 10, 1000); //mapealo a un volumen, ponele q max=1000 y min=10
+//         lcd.setCursor(1, 0);
+//         lcd.print(volumenMate);
+//         lcd.setCursor(1, 5);
+//         lcd.print("ml");
+//     }
+//Una vez q saliste del loop, es decir, el loco tocó para adelante, guardas el volumen en EEPROM
 
 /* //Si la lista de horarios esta vacia 
     //Lee el relojito
@@ -139,37 +273,44 @@ void loop()
             //guardalo en el EEPROM */
 
 // }
-void crop(int tiempo)
+
+String cleanTime(int tiempo)
 {
     if (tiempo < 10)
     {
-        lcd.print("0");
-        lcd.print(tiempo);
+        return "0" + String(tiempo);
     }
     else
     {
-        lcd.print(tiempo);
+        return String(tiempo);
     }
 }
 
 String printHora(String hora)
 {
-    const String dias[] = {"Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"};
-    //TODO: Revisar definición de charAt
-    String dia = dias[horaAsInt(0, hora)];
+    String dia_ = dias[horaAsInt(0, hora)];
     //? Resto 48 para pasar de char a int
-    // Serial.println((int)(hora.charAt(0)-48));
-    // String horario = String(horaAsInt(1, hora)+horaAsInt(2, hora)+":"+horaAsInt(3, hora)+horaAsInt(4, hora));
-    String horario = String(hora.substring(1,3)+":"+hora.substring(3));
-    Serial.println(dia);
-    Serial.println(horario);
-    Serial.println(dia + " " + horario);
-    return String(dia + " " + horario);
-    
+    String horario = String(hora.substring(1, 3) + ":" + hora.substring(3));
+    return String(dia_ + " " + horario);
 }
 
-int horaAsInt(int indice, String horario) {
-    return ((int)horario.charAt(0))-48;
+String comprimirHora(String day, String hour, String min)
+{
+    //7 es el largo del array de dias
+    int i;
+    for (i = 0; i < 7; i++)
+    {
+        if (day == dias[i])
+        {
+            break;
+        }
+    }
+    return (String(i) + hour + min);
+}
+
+int horaAsInt(int indice, String horario)
+{
+    return ((int)horario.charAt(0)) - 48;
 }
 
 int maxIndiceNoVacio()
@@ -178,8 +319,39 @@ int maxIndiceNoVacio()
     {
         if (listaDeHorarios[i].length() == 0)
         {
-            return i-1;
+            return i - 1;
         }
     }
     return -1;
+}
+
+void shiftArray(String array[], int indice)
+{
+    for (int i = indice; i <= array->length() - 1; i++)
+    {
+        if (i == array->length())
+        {
+            array[i] = "";
+        }
+        else
+        {
+            array[i] = array[i + 1];
+        }
+    }
+}
+
+void printArray(String array[])
+{
+    Serial.print("{");
+    for (int i = 0; i < array->length() - 1; i++)
+    {
+        Serial.print(array[i]);
+        Serial.print(",");
+    }
+    Serial.println("}");
+}
+
+String leerHora(DateTime now)
+{
+    return String(now.dayOfTheWeek()) + String(now.hour()) + String(now.minute());
 }

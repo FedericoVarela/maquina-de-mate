@@ -1,8 +1,18 @@
 # maquina de mate
 Primero armamos el circuito y el código necesario para corroborar que todo funciona correctamente. Luego, probamos como funcionaría distintos detalles de implementación, por ejemplo, las dimensiones de la lista que guarda los horarios en los cuáles hay que hacer el mate y el funcionamiento de la interfaz.
 
-La interfaz tiene 
+La interfaz tiene dos modalidades que corresponden a la vista de horarios y al agregado de horarios. En principio pensamos en usar una variable para guardar al modo actual del programa y un switch para acceder a cada modalidad basándonos en esa variable, pero abandonamos el switch en favor de un if porque el switch traía problemas cuando modificábamos la variable.
+
+El primer modo consiste en un visualizador de horarios que tambien permite al usuario borrar el que tiene seleccionado. Para la navegacion hicimos uso del potenciometro que hace un mapeo de 0 a la cantidad de elementos que hay en el array de horarios. Esto es un problema ya que los arrays tienen un largo fijo y por tanto no se puede saber la cantidad de horarios exacta. Para esto se tuvo que implementar una funcion que recorre el array y suma un numero a una variable por cada elemento que tiene un string de largo mayor que 0.
+
+El segundo modo consta de tres partes, la cuales corresponden a la selección de día, hora y minuto, cada uno de ellos con una correspondiente sentencia de cancelar si se toca el botón de cancelar, en cuyo caso se vuelve al primer modo sin agregar ningún horario. En cada parte, el valor se ingresa usando el potenciómetro, el cual regula la entrada para que siempre sea válida, y cuando se finaliza, se toca el botón de aceptar para pasar a la siguiente parte o para terminar el proceso y volver al primer modo, esta vez con un nuevo horario.
 
 Para la lista de horarios, pensamos en hacer un array tridimensional, donde separaríamos los días, y dentro de ellos, dos arrays, uno para las horas y otro para los minutos. Estos mismos estarían relacionados mediante el índice, conformando el primer elemento de ambas listas un solo horario, por ejemplo. Abandonamos esta idea porque no era compatible con la navegación de horarios prevista usando un potenciómetro, y sería complicado asignarle una posición bidimensional a las medidas de este componente. 
 
 Decidimos hacer un array de strings para este propósito, donde cada string tiene 5 números, correspondiendo el primero al día de la semana, del 1 al 7, y los demás a la hora y minuto, en un formato de 24 horas sin separador.
+
+Escribimos dos funciones que de forma basica transforman los horarios de un formato al otro, es decir, una pasa de el numero de 5 digitos a: Dia, hora, minuto, y la otra hace lo inverso. Esto lo hicimos sin problemas, ya que el unico requerimiento que surgio fue crear un array que contenga los dias de la semana para poder asignar un indice a cada dia. El lunes corresponde al 0, etc.
+
+También creamos funciones para manipular los arrays que correspondían a el listado de horarios y a la lista constante de días de la semana, en particular para poder imprimirlos en el monitor serial para revisar el funcionamiento del programa, y para mover los valores del array un lugar para atrás cuando se borra un valor, ya que el programa depende de detectar el primer lugar vacío del listado de horarios para identificar donde terminan los índices poblados del array. 
+
+Para facilitar la legibilidad de los horarios en el LCD, escribimos una función que agrega un cero a la hora o minuto si esta tiene un solo dígito.
